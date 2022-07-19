@@ -1,16 +1,5 @@
-import {
-  Instrumentation,
-  MetaItem,
-  App,
-  Session,
-  User,
-  Config,
-  defaultGlobalObjectKey,
-  Transport,
-  Patterns,
-  APIEvent,
-  BeforeSendHook,
-} from '@grafana/agent-core';
+import { defaultGlobalObjectKey } from '@grafana/agent-core';
+import type { Config, Instrumentation, MetaItem, Transport } from '@grafana/agent-core';
 
 import {
   ConsoleInstrumentation,
@@ -21,21 +10,9 @@ import {
 import { browserMeta, pageMeta } from './metas';
 import { FetchTransport } from './transports';
 
-export interface BrowserConfig {
-  app: App;
-
+export interface BrowserConfig extends Partial<Omit<Config, 'app' | 'parseStacktrace'>>, Pick<Config, 'app'> {
   url?: string;
   apiKey?: string;
-  session?: Session;
-  user?: User;
-  globalObjectKey?: string;
-  preventGlobalExposure?: boolean;
-  metas?: MetaItem[];
-  instrumentations?: Instrumentation[];
-  transports?: Transport[];
-  ignoreErrors?: Patterns;
-  beforeSend?: BeforeSendHook<APIEvent>;
-  paused?: boolean;
 }
 
 export const defaultMetas: MetaItem[] = [browserMeta, pageMeta];
@@ -44,7 +21,7 @@ interface GetWebInstrumentationsOptions {
   captureConsole?: boolean;
 }
 
-export const getWebInstrumentations = (options: GetWebInstrumentationsOptions = {}): Instrumentation[] => {
+export function getWebInstrumentations(options: GetWebInstrumentationsOptions = {}): Instrumentation[] {
   const instrumentations: Instrumentation[] = [new ErrorsInstrumentation(), new WebVitalsInstrumentation()];
 
   if (options.captureConsole !== false) {
@@ -52,14 +29,16 @@ export const getWebInstrumentations = (options: GetWebInstrumentationsOptions = 
   }
 
   return instrumentations;
-};
+}
 
 export function makeCoreConfig(browserConfig: BrowserConfig): Config {
   const transports: Transport[] = [];
+
   if (browserConfig.transports) {
     if (browserConfig.url || browserConfig.apiKey) {
       throw new Error('if "transports" is defined, "url" and "apiKey" should not be defined');
     }
+
     transports.push(...browserConfig.transports);
   } else if (browserConfig.url) {
     transports.push(
@@ -72,20 +51,20 @@ export function makeCoreConfig(browserConfig: BrowserConfig): Config {
     throw new Error('either "url" or "transports" must be defined');
   }
 
-  const config: Config = {
-    globalObjectKey: browserConfig.globalObjectKey || defaultGlobalObjectKey,
-    preventGlobalExposure: browserConfig.preventGlobalExposure || false,
-    transports,
-    metas: browserConfig.metas ?? defaultMetas,
-    instrumentations: browserConfig.instrumentations ?? getWebInstrumentations(),
+  return {
     app: browserConfig.app,
-    session: browserConfig.session,
-    user: browserConfig.user,
+    beforeSend: browserConfig.beforeSend,
+    globalObjectKey: browserConfig.globalObjectKey || defaultGlobalObjectKey,
     ignoreErrors: browserConfig.ignoreErrors,
+    instrumentations: browserConfig.instrumentations ?? getWebInstrumentations(),
+    internalLoggerLevel: browserConfig.internalLoggerLevel,
+    metas: browserConfig.metas ?? defaultMetas,
+    originalConsole: browserConfig.originalConsole,
     parseStacktrace,
     paused: browserConfig.paused ?? false,
-    beforeSend: browserConfig.beforeSend,
+    preventGlobalExposure: browserConfig.preventGlobalExposure || false,
+    session: browserConfig.session,
+    transports,
+    user: browserConfig.user,
   };
-
-  return config;
 }

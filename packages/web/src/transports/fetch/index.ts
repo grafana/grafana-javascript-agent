@@ -1,6 +1,4 @@
-import { BaseTransport, getTransportBody, LogLevel, prefixAgentMessage, TransportItem } from '@grafana/agent-core';
-
-const debugMessage = prefixAgentMessage('Failed sending payload to the receiver');
+import { BaseTransport, getTransportBody, TransportItem, VERSION } from '@grafana/agent-core';
 
 export interface FetchTransportRequestOptions extends Omit<RequestInit, 'body' | 'headers'> {
   headers?: Record<string, string>;
@@ -12,20 +10,22 @@ export interface FetchTransportOptions {
 
   // will be added as `x-api-key` header
   apiKey?: string;
-  debug?: boolean;
   requestOptions?: FetchTransportRequestOptions;
 }
 
 export class FetchTransport extends BaseTransport {
+  readonly name = '@grafana/agent-web:transport-fetch';
+  readonly version = VERSION;
+
   constructor(private options: FetchTransportOptions) {
     super();
   }
 
-  async send(item: TransportItem) {
+  async send(item: TransportItem): Promise<void> {
     try {
       const body = JSON.stringify(getTransportBody(item));
 
-      const { url, debug, requestOptions, apiKey } = this.options;
+      const { url, requestOptions, apiKey } = this.options;
 
       const { headers, ...restOfRequestOptions } = requestOptions ?? {};
 
@@ -40,11 +40,11 @@ export class FetchTransport extends BaseTransport {
         keepalive: true,
         ...(restOfRequestOptions ?? {}),
       }).catch(() => {
-        if (debug) {
-          this.agent.api.callOriginalConsoleMethod(LogLevel.DEBUG, debugMessage, JSON.parse(body));
-        }
+        this.logError('Failed sending payload to the receiver\n', JSON.parse(body));
       });
-    } catch (err) {}
+    } catch (err) {
+      this.logError(err);
+    }
   }
 
   override getIgnoreUrls(): Array<string | RegExp> {
